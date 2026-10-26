@@ -184,7 +184,7 @@ table.preview tr:hover td{background:#fafbfd}
 <div class="card" id="searchCard" style="display:none">
 <h2><span class="idx">4</span> 搜索列配置</h2>
 <p class="tip">勾选哪些列开放给前台作为搜索输入框；可拖动排序决定在页面上的显示顺序。<br>
-勾选右侧的「精确匹配」即设为<b>校验列</b>：该搜索框必须输入完整内容才会命中（不填则不参与筛选）；不勾选则按包含关键词匹配。</p>
+勾选右侧的「精确匹配」即设为<b>校验列</b>：该搜索框为必填项，且必须输入与单元格完全一致的完整内容才会命中；不勾选则按包含关键词匹配，且非必填。</p>
 <div class="col-list" id="searchList"></div>
 </div>
 
@@ -229,7 +229,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Micr
 .top{background:linear-gradient(135deg,var(--main),__COLOR2__);color:#fff;padding:38px 24px;text-align:center}
 .top h1{font-size:clamp(24px,3.2vw,40px);font-weight:700;line-height:1.35;margin-bottom:10px;letter-spacing:.5px}
 .top .sub{opacity:.92;font-size:14px;line-height:1.8;white-space:pre-wrap;max-width:1000px;margin:0 auto}
-.container{width:100%;max-width:none;margin:0 auto;padding:24px}
+.container{width:100%;max-width:1200px;margin:0 auto;padding:24px}
 .card{background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:22px;margin-bottom:20px}
 .card h2{font-size:15px;font-weight:600;margin-bottom:14px}
 .card h2.center{text-align:center;font-size:18px;margin-bottom:18px}
@@ -424,6 +424,27 @@ function collectConditions(){
 }
 
 function doSearch(){
+  // 校验列（精确匹配）为必填项：必须填写且内容完全一致才会命中
+  var exactInputs = document.querySelectorAll('.fields input[data-exact="1"]');
+  for (var z = 0; z < exactInputs.length; z++){
+    exactInputs[z].style.borderColor = '';
+    exactInputs[z].style.boxShadow = '';
+  }
+  for (var e = 0; e < exactInputs.length; e++){
+    if (!exactInputs[e].value.trim()){
+      var labelEl = exactInputs[e].parentNode.querySelector('label');
+      var colName = labelEl ? labelEl.textContent.replace(/精确匹配/g, '').trim() : '该校验列搜索框';
+      document.getElementById('resultBox').innerHTML = emptyHtml('⚠️', '请先填写「' + colName + '」\n（校验列为必填项，必须输入完整内容）');
+      document.getElementById('resultCount').textContent = '';
+      document.getElementById('btnExport').disabled = true;
+      document.getElementById('pager').style.display = 'none';
+      exactInputs[e].style.borderColor = '#e74c3c';
+      exactInputs[e].style.boxShadow = '0 0 0 3px rgba(231,76,60,.12)';
+      exactInputs[e].focus();
+      return;
+    }
+  }
+
   var qs = collectConditions();
   if (qs.length === 0){ viewRows = []; resetView(); return; }
 
