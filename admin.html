@@ -5,9 +5,9 @@
 <title>表格列查询控制生成系统 · 管理后台</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:#f4f6fa;color:#2c3e50;min-height:100vh;padding:24px}
-h1{font-size:22px;font-weight:600;margin-bottom:4px}
-.sub{color:#7a8a9a;font-size:13px;margin-bottom:20px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:#f4f6fa;color:#2c3e50;min-height:100vh;width:100%;padding:24px}
+h1{font-size:30px;font-weight:700;letter-spacing:.5px;margin-bottom:8px;text-align:center}
+.sub{color:#7a8a9a;font-size:13px;margin-bottom:24px;text-align:center;line-height:1.7}
 .card{background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:20px;margin-bottom:20px}
 .card h2{font-size:16px;font-weight:600;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #eef1f6;display:flex;align-items:center;gap:8px}
 .card h2 .idx{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;background:#3498db;color:#fff;border-radius:50%;font-size:13px;font-weight:600}
@@ -65,6 +65,29 @@ table.preview tr:hover td{background:#fafbfd}
 @keyframes spin{to{transform:rotate(360deg)}}
 .busy-text{font-size:14px;color:#2c3e50;font-weight:500}
 .busy-sub{font-size:12px;color:#8a97a6;margin-top:8px;line-height:1.6}
+
+/* 平板 / 手机自适应 */
+@media (max-width:900px){
+  body{padding:16px}
+  h1{font-size:24px}
+  .row3{grid-template-columns:1fr}
+  .busy-box{min-width:0;width:calc(100% - 40px);max-width:380px;padding:24px 20px}
+}
+@media (max-width:640px){
+  body{padding:12px}
+  h1{font-size:21px;letter-spacing:0}
+  .sub{font-size:12px;margin-bottom:18px}
+  .card{padding:14px;margin-bottom:14px}
+  .card h2{font-size:15px}
+  .upload-zone{padding:26px 12px}
+  .upload-zone .big{font-size:32px}
+  .upload-zone p{font-size:13px}
+  .actions{flex-wrap:wrap;justify-content:center}
+  .actions .btn{flex:1 1 45%;justify-content:center}
+  .col-list{max-height:260px}
+  .preview-wrap{max-height:240px}
+  table.preview th,table.preview td{padding:6px 8px}
+}
 </style>
 </head>
 <body>
@@ -196,19 +219,21 @@ table.preview tr:hover td{background:#fafbfd}
 <title>__TITLE__</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:#f4f6fa;color:#2c3e50;min-height:100vh;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:#f4f6fa;color:#2c3e50;min-height:100vh;width:100%;padding:0}
 :root{--main:__COLOR__;--main-light:__LIGHT__;--hover:__HOVER__}
-.top{background:linear-gradient(135deg,var(--main),__COLOR2__);color:#fff;padding:28px 32px}
-.top h1{font-size:22px;font-weight:600;margin-bottom:4px}
-.top .sub{opacity:.92;font-size:13px;line-height:1.7;white-space:pre-wrap}
-.container{max-width:1280px;margin:0 auto;padding:24px}
-.card{background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:20px;margin-bottom:20px}
+.top{background:linear-gradient(135deg,var(--main),__COLOR2__);color:#fff;padding:38px 24px;text-align:center}
+.top h1{font-size:clamp(24px,3.2vw,40px);font-weight:700;line-height:1.35;margin-bottom:10px;letter-spacing:.5px}
+.top .sub{opacity:.92;font-size:14px;line-height:1.8;white-space:pre-wrap;max-width:1000px;margin:0 auto}
+.container{width:100%;max-width:none;margin:0 auto;padding:24px}
+.card{background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:22px;margin-bottom:20px}
 .card h2{font-size:15px;font-weight:600;margin-bottom:14px}
-.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.card h2.center{text-align:center;font-size:18px;margin-bottom:18px}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr));gap:14px}
+.field{min-width:0}
 .field label{display:block;font-size:12px;color:#555;margin-bottom:4px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .field input{width:100%;padding:9px 12px;border:1px solid #dce3ec;border-radius:6px;font-size:13px;outline:none;transition:border-color .15s}
 .field input:focus{border-color:var(--main);box-shadow:0 0 0 3px var(--main-light)}
-.actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;justify-content:center}
 .btn{padding:9px 20px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
 .btn-primary{background:var(--main);color:#fff}
 .btn-primary:hover{background:var(--hover)}
@@ -234,7 +259,7 @@ tbody tr:last-child td{border-bottom:none}
 .pager button:disabled{opacity:.45;cursor:not-allowed}
 .footer{text-align:center;color:#9aa5b1;font-size:12px;padding:24px 10px}
 .lock{position:fixed;inset:0;background:linear-gradient(135deg,var(--main),__COLOR3__);display:flex;align-items:center;justify-content:center;z-index:9999}
-.lock-box{background:#fff;padding:36px 32px;border-radius:12px;width:340px;box-shadow:0 20px 40px rgba(0,0,0,.2)}
+.lock-box{background:#fff;padding:36px 32px;border-radius:12px;width:340px;max-width:calc(100% - 32px);box-shadow:0 20px 40px rgba(0,0,0,.2)}
 .lock-box h2{font-size:18px;margin-bottom:6px;text-align:center}
 .lock-box p{font-size:13px;color:#7a8a9a;margin-bottom:18px;text-align:center}
 .lock-box input{width:100%;padding:10px 14px;border:1px solid #dce3ec;border-radius:6px;font-size:14px;outline:none;margin-bottom:14px}
@@ -242,6 +267,33 @@ tbody tr:last-child td{border-bottom:none}
 .lock-box button{width:100%;padding:10px;border:none;border-radius:6px;background:var(--main);color:#fff;font-size:14px;cursor:pointer;font-weight:500}
 .lock-box button:hover{background:var(--hover)}
 .lock-box .err{color:#e74c3c;font-size:12px;min-height:16px;margin-bottom:8px;text-align:center}
+
+/* 平板 / 手机自适应 */
+@media (max-width:900px){
+  .top{padding:30px 18px}
+  .container{padding:16px}
+  .card{padding:18px}
+  .fields{grid-template-columns:repeat(auto-fill,minmax(min(200px,100%),1fr))}
+}
+@media (max-width:640px){
+  .top{padding:24px 14px}
+  .top .sub{font-size:13px}
+  .container{padding:12px}
+  .card{padding:16px;border-radius:8px;margin-bottom:14px}
+  .card h2.center{font-size:16px;margin-bottom:14px}
+  .fields{grid-template-columns:minmax(0,1fr);gap:12px}
+  .actions{flex-direction:column}
+  .actions .btn{width:100%;justify-content:center}
+  .result-head{flex-direction:column;align-items:stretch;gap:12px;text-align:center}
+  .result-head h2{text-align:center}
+  .result-head .count{text-align:center}
+  .result-head .btn{width:100%;justify-content:center}
+  .table-wrap{max-height:65vh}
+  .pager{flex-wrap:wrap;justify-content:center}
+  .footer{padding:18px 10px}
+  .lock-box{width:auto;padding:28px 22px}
+}
+
 </style>
 </head>
 <body>
@@ -255,7 +307,7 @@ __SUBHTML__
 
 <div class="container">
   <div class="card">
-    <h2>🔍 搜索条件</h2>
+    <h2 class="center">🔍 搜索条件</h2>
     <div class="fields">
 __SEARCHINPUTS__
     </div>
