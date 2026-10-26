@@ -43,6 +43,10 @@ input[type=color]{width:48px;height:32px;border:1px solid #dce3ec;border-radius:
 .col-item input[type=checkbox]{width:16px;height:16px;cursor:pointer;flex:none}
 .col-item .name{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .col-item .hint{font-size:11px;color:#9aa5b1;margin-left:6px;flex:none}
+.col-item .exact-wrap{display:inline-flex;align-items:center;gap:4px;flex:none;font-size:11px;color:#7a8a9a;background:#f4f6fa;border-radius:10px;padding:2px 8px;cursor:pointer;user-select:none}
+.col-item .exact-wrap:hover{background:#eef7ff;color:#3498db}
+.col-item .exact-wrap input{width:13px;height:13px;cursor:pointer;margin:0}
+.col-item .exact-wrap:has(input:checked){background:#e8f4ff;color:#2980b9}
 .col-item.dragging{opacity:.5;background:#eef7ff}
 .col-item.drop-target{border-top:2px solid #3498db}
 .preview-wrap{border:1px solid #eef1f6;border-radius:8px;max-height:300px;overflow:auto}
@@ -179,7 +183,8 @@ table.preview tr:hover td{background:#fafbfd}
 <!-- 4. 搜索列配置 -->
 <div class="card" id="searchCard" style="display:none">
 <h2><span class="idx">4</span> 搜索列配置</h2>
-<p class="tip">勾选哪些列开放给前台作为搜索输入框；可拖动排序决定在页面上的显示顺序。</p>
+<p class="tip">勾选哪些列开放给前台作为搜索输入框；可拖动排序决定在页面上的显示顺序。<br>
+勾选右侧的「精确匹配」即设为<b>校验列</b>：该搜索框必须输入完整内容才会命中（不填则不参与筛选）；不勾选则按包含关键词匹配。</p>
 <div class="col-list" id="searchList"></div>
 </div>
 
@@ -231,6 +236,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Micr
 .fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr));gap:14px}
 .field{min-width:0}
 .field label{display:block;font-size:12px;color:#555;margin-bottom:4px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.exact-tag{display:inline-block;padding:1px 6px;margin-left:4px;border-radius:8px;background:var(--main-light);color:var(--main);font-size:10px;font-weight:600;vertical-align:1px}
 .field input{width:100%;padding:9px 12px;border:1px solid #dce3ec;border-radius:6px;font-size:13px;outline:none;transition:border-color .15s}
 .field input:focus{border-color:var(--main);box-shadow:0 0 0 3px var(--main-light)}
 .actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;justify-content:center}
@@ -257,7 +263,9 @@ tbody tr:last-child td{border-bottom:none}
 .pager button{padding:6px 14px;border:1px solid #dce3ec;background:#fff;border-radius:6px;cursor:pointer;font-size:13px}
 .pager button:hover:not(:disabled){background:#f4f6fa}
 .pager button:disabled{opacity:.45;cursor:not-allowed}
-.footer{text-align:center;color:#9aa5b1;font-size:12px;padding:24px 10px}
+.footer{text-align:center;color:#9aa5b1;font-size:12px;padding:24px 10px;line-height:1.9}
+.footer-meta{color:#8a97a6;font-size:12px;margin-bottom:4px}
+.footer-text{font-size:12px}
 .lock{position:fixed;inset:0;background:linear-gradient(135deg,var(--main),__COLOR3__);display:flex;align-items:center;justify-content:center;z-index:9999}
 .lock-box{background:#fff;padding:36px 32px;border-radius:12px;width:340px;max-width:calc(100% - 32px);box-shadow:0 20px 40px rgba(0,0,0,.2)}
 .lock-box h2{font-size:18px;margin-bottom:6px;text-align:center}
@@ -339,7 +347,10 @@ __SEARCHINPUTS__
   </div>
 </div>
 
+<div class="footer" id="footer">
+  <div class="footer-meta" id="footerMeta"></div>
 __FOOTERHTML__
+</div>
 
 <!-- 内嵌 SheetJS -->
 <script>__SHEETJS__</script>
@@ -352,6 +363,18 @@ var __D__ = __ROWSJSON__;
 var PAGE_SIZE = 100;
 var viewRows = [];
 var curPage = 0;
+
+/* ---------- 页脚信息：当前日期时间 · 数据表行数 · 更新日期 ---------- */
+(function(){
+  var el = document.getElementById('footerMeta');
+  if (!el) return;
+  var p = function(n){ return (n < 10 ? '0' : '') + n; };
+  var d = new Date();
+  var now = d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) + ' ' +
+            p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  var rowsText = (__D__ && __D__.length) ? __D__.length.toLocaleString() : '0';
+  el.textContent = '🕒 ' + now + '　·　数据表 ' + rowsText + ' 行　·　更新日期 ' + (__CFG__.fileDate || '—');
+})();
 
 /* ---------- 密码门 ---------- */
 (function(){
@@ -391,7 +414,11 @@ function collectConditions(){
   var inputs = document.querySelectorAll('.fields input[data-i]');
   for (var k = 0; k < inputs.length; k++){
     var v = inputs[k].value.trim();
-    if (v) qs.push({ i: parseInt(inputs[k].getAttribute('data-i'), 10), v: v.toLowerCase() });
+    if (v) qs.push({
+      i: parseInt(inputs[k].getAttribute('data-i'), 10),
+      v: v.toLowerCase(),
+      exact: inputs[k].getAttribute('data-exact') === '1'   // 校验列：必须填完整内容
+    });
   }
   return qs;
 }
@@ -410,7 +437,12 @@ function doSearch(){
     for (var q = 0; q < qs.length; q++){
       var cell = row[qs[q].i];
       if (cell === undefined || cell === null || cell === ''){ ok = false; break; }
-      if (String(cell).toLowerCase().indexOf(qs[q].v) === -1){ ok = false; break; }
+      var cellStr = String(cell).trim().toLowerCase();
+      if (qs[q].exact){
+        if (cellStr !== qs[q].v){ ok = false; break; }
+      } else {
+        if (cellStr.indexOf(qs[q].v) === -1){ ok = false; break; }
+      }
     }
     if (ok) out.push(row);
   }
@@ -517,6 +549,7 @@ var state = {
   buffer: null,       // 原始文件 ArrayBuffer（切换 sheet 时复用，避免重复读文件）
   fileName: '',
   fileSize: 0,
+  fileMtime: null,    // 文件最后修改时间（用于前台页脚“更新日期”）
   workbook: null,     // 仅用于读取 sheet 名
   sheetName: '',
   matrix: [],         // 首行为表头，其余为数据；二维数组比对象数组省内存
@@ -596,6 +629,7 @@ async function handleFile(file){
     state.buffer = ab;
     state.fileName = file.name;
     state.fileSize = file.size;
+    state.fileMtime = file.lastModified || Date.now();
 
     // 第一步：只读工作表名（很快，约 0.3 秒）
     showBusy('正在读取工作表列表…');
@@ -899,7 +933,20 @@ function renderColList(containerId, isSearch){
     hint.className = 'hint';
     hint.textContent = '列 #' + (idx + 1);
 
-    item.appendChild(handle); item.appendChild(cb); item.appendChild(nameEl); item.appendChild(hint);
+    item.appendChild(handle); item.appendChild(cb); item.appendChild(nameEl);
+    if (isSearch){
+      var exactWrap = document.createElement('label');
+      exactWrap.className = 'exact-wrap';
+      exactWrap.title = '设为校验列：搜索框必须输入完整内容才匹配';
+      var exactCb = document.createElement('input');
+      exactCb.type = 'checkbox';
+      exactCb.className = 'exact-cb';
+      exactCb.setAttribute('data-idx', idx);
+      exactWrap.appendChild(exactCb);
+      exactWrap.appendChild(document.createTextNode('精确匹配'));
+      item.appendChild(exactWrap);
+    }
+    item.appendChild(hint);
     box.appendChild(item);
   });
   attachDrag(box);
@@ -933,7 +980,8 @@ function getOrderedChecked(containerId){
     var cb = item.querySelector('input[type=checkbox]');
     if (cb.checked){
       var idx = parseInt(cb.getAttribute('data-idx'), 10);
-      out.push({ i: idx, name: state.headers[idx] });
+      var exactCb = item.querySelector('input.exact-cb');
+      out.push({ i: idx, name: state.headers[idx], exact: !!(exactCb && exactCb.checked) });
     }
   });
   return out;
@@ -946,6 +994,13 @@ $('cfgColor').addEventListener('input', function(e){ colorHex.textContent = e.ta
 $('cfgPreset').addEventListener('change', function(e){
   if (e.target.value){ $('cfgColor').value = e.target.value; colorHex.textContent = e.target.value; }
 });
+
+function fmtDate(ts){
+  if (!ts) return '';
+  var d = new Date(ts);
+  var p = function(n){ return (n < 10 ? '0' : '') + n; };
+  return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
 
 function hexToRgb(hex){
   hex = String(hex).replace('#','');
@@ -980,7 +1035,8 @@ async function buildStandaloneHtml(){
     sheetName: state.sheetName,
     search: searchCols,
     cols: resultCols.map(function(c){ return c.i; }),
-    total: state.matrix.length
+    total: state.matrix.length,
+    fileDate: fmtDate(state.fileMtime)
   };
 
   showBusy('正在生成查询页…', '数据量较大时需要几秒');
@@ -1009,8 +1065,11 @@ function fillTemplate(cfg, sheetJsCode){
   var rgb = hexToRgb(color);
 
   var searchInputs = cfg.search.map(function(c, i){
-    return '        <div class="field">\n          <label>' + escHtml(c.name) + '</label>\n' +
-           '          <input type="text" data-i="' + c.i + '" id="q_' + i + '" placeholder="输入关键词…">\n        </div>';
+    var exactAttr = c.exact ? ' data-exact="1"' : '';
+    var exactTag = c.exact ? '<span class="exact-tag">精确匹配</span>' : '';
+    var placeholder = c.exact ? '需输入完整内容' : '输入关键词…';
+    return '        <div class="field">\n          <label>' + escHtml(c.name) + exactTag + '</label>\n' +
+           '          <input type="text" data-i="' + c.i + '"' + exactAttr + ' id="q_' + i + '" placeholder="' + placeholder + '">\n        </div>';
   }).join('\n');
 
   var lockHtml = '';
@@ -1023,7 +1082,7 @@ function fillTemplate(cfg, sheetJsCode){
   }
 
   var subHtml = cfg.hint ? '  <div class="sub">' + escHtml(cfg.hint) + '</div>' : '';
-  var footerHtml = cfg.footer ? '<div class="footer">' + escHtml(cfg.footer) + '</div>' : '';
+  var footerHtml = cfg.footer ? '<div class="footer-text">' + escHtml(cfg.footer) + '</div>' : '';
   var emptyHint = cfg.hint || '请在上方输入搜索条件后点击「查询」。';
 
   var cfgJson = safeJson(cfg);
