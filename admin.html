@@ -17,7 +17,6 @@ input[type=text]:focus,input[type=password]:focus,textarea:focus,select:focus{bo
 textarea{resize:vertical;min-height:70px}
 input[type=color]{width:48px;height:32px;border:1px solid #dce3ec;border-radius:6px;cursor:pointer;padding:2px}
 .row{display:grid;gap:14px}
-.row2{grid-template-columns:1fr 1fr}
 .row3{grid-template-columns:1fr 1fr 1fr}
 .upload-zone{border:2px dashed #c7d2de;border-radius:10px;padding:40px;text-align:center;cursor:pointer;transition:all .15s;background:#fafbfd}
 .upload-zone:hover,.upload-zone.drag{border-color:#3498db;background:#eef7ff}
@@ -40,10 +39,10 @@ input[type=color]{width:48px;height:32px;border:1px solid #dce3ec;border-radius:
 .col-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f0f3f7;background:#fff;cursor:move;user-select:none}
 .col-item:last-child{border-bottom:none}
 .col-item:hover{background:#fafbfd}
-.col-item .handle{color:#b0b8c1;font-size:14px}
-.col-item input[type=checkbox]{width:16px;height:16px;cursor:pointer}
-.col-item .name{flex:1;font-size:13px}
-.col-item .hint{font-size:11px;color:#9aa5b1;margin-left:6px}
+.col-item .handle{color:#b0b8c1;font-size:14px;flex:none;width:14px}
+.col-item input[type=checkbox]{width:16px;height:16px;cursor:pointer;flex:none}
+.col-item .name{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.col-item .hint{font-size:11px;color:#9aa5b1;margin-left:6px;flex:none}
 .col-item.dragging{opacity:.5;background:#eef7ff}
 .col-item.drop-target{border-top:2px solid #3498db}
 .preview-wrap{border:1px solid #eef1f6;border-radius:8px;max-height:300px;overflow:auto}
@@ -55,11 +54,29 @@ table.preview tr:hover td{background:#fafbfd}
 .actions{position:sticky;bottom:0;background:#f4f6fa;padding-top:18px;display:flex;gap:10px;justify-content:flex-end}
 .divider{height:1px;background:#eef1f6;margin:14px 0}
 .tip{font-size:12px;color:#7a8a9a;margin-top:6px;line-height:1.6}
-.tag{display:inline-block;padding:2px 8px;border-radius:10px;background:#eef7ff;color:#3498db;font-size:11px;margin-left:6px}
+.tag{display:inline-block;padding:2px 8px;border-radius:10px;background:#eef7ff;color:#3498db;font-size:11px;margin-left:6px;flex:none}
 .first-col-tag{background:#fff3e0;color:#e67e22}
+
+/* 处理中的遮罩：避免长任务期间用户以为卡死 */
+.busy{position:fixed;inset:0;background:rgba(28,38,50,.55);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:99999}
+.busy.show{display:flex}
+.busy-box{background:#fff;border-radius:12px;padding:28px 34px;min-width:340px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.spinner{width:38px;height:38px;border:4px solid #e6ecf3;border-top-color:#3498db;border-radius:50%;margin:0 auto 16px;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.busy-text{font-size:14px;color:#2c3e50;font-weight:500}
+.busy-sub{font-size:12px;color:#8a97a6;margin-top:8px;line-height:1.6}
 </style>
 </head>
 <body>
+
+<!-- 全局处理中遮罩 -->
+<div class="busy" id="busy">
+  <div class="busy-box">
+    <div class="spinner"></div>
+    <div class="busy-text" id="busyText">正在处理…</div>
+    <div class="busy-sub" id="busySub">大文件解析需要几秒，请勿关闭页面</div>
+  </div>
+</div>
 
 <h1>📊 表格列查询控制生成系统</h1>
 <p class="sub">上传 Excel → 配置列与外观 → 生成独立单文件查询网页（数据全部内嵌，双击即可用）</p>
@@ -69,7 +86,7 @@ table.preview tr:hover td{background:#fafbfd}
 <h2><span class="idx">1</span> 上传 Excel 文件</h2>
 <div id="dropZone" class="upload-zone">
 <div class="big">📁</div>
-<p>点击选择或拖入 .xlsx / .xls 文件</p>
+<p>点击选择或拖入 .xlsx / .xls 文件（支持数万行）</p>
 <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
 </div>
 <div id="fileInfo" class="file-info"></div>
@@ -159,22 +176,23 @@ table.preview tr:hover td{background:#fafbfd}
 <div id="genArea" class="card" style="display:none;margin-top:24px">
 <h2><span class="idx">6</span> 生成结果</h2>
 <div id="genInfo" class="stats"></div>
-<textarea id="genOutput" style="width:100%;height:260px;font-family:monospace;font-size:12px" readonly></textarea>
-<div style="display:flex;gap:10px;margin-top:10px">
+<div id="genNote" class="tip" style="display:none"></div>
+<textarea id="genOutput" style="width:100%;height:240px;font-family:monospace;font-size:12px" readonly placeholder="内容过大时此处不显示源码，请直接下载"></textarea>
+<div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
 <button class="btn btn-ghost" id="btnCopy">📋 复制 HTML</button>
 <button class="btn btn-success" id="btnDownload">💾 下载为 .html</button>
 </div>
 </div>
 
 <!-- ============================================================
-   前台查询页完整 HTML 模板（放在 <template> 中避免 </script> 干扰 admin）
-   使用 {{PLACEHOLDER}} 占位符
+   前台查询页模板（放在 <template> 内，脚本内容不会被 admin 执行）
    ============================================================ -->
 <template id="queryTemplate">
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>__TITLE__</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -182,12 +200,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Micr
 :root{--main:__COLOR__;--main-light:__LIGHT__;--hover:__HOVER__}
 .top{background:linear-gradient(135deg,var(--main),__COLOR2__);color:#fff;padding:28px 32px}
 .top h1{font-size:22px;font-weight:600;margin-bottom:4px}
-.top .sub{opacity:.9;font-size:13px}
-.container{max-width:1200px;margin:0 auto;padding:24px}
+.top .sub{opacity:.92;font-size:13px;line-height:1.7;white-space:pre-wrap}
+.container{max-width:1280px;margin:0 auto;padding:24px}
 .card{background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:20px;margin-bottom:20px}
 .card h2{font-size:15px;font-weight:600;margin-bottom:14px}
 .fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
-.field label{display:block;font-size:12px;color:#555;margin-bottom:4px;font-weight:500}
+.field label{display:block;font-size:12px;color:#555;margin-bottom:4px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .field input{width:100%;padding:9px 12px;border:1px solid #dce3ec;border-radius:6px;font-size:13px;outline:none;transition:border-color .15s}
 .field input:focus{border-color:var(--main);box-shadow:0 0 0 3px var(--main-light)}
 .actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
@@ -197,18 +215,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Micr
 .btn-ghost{background:#fff;color:#555;border:1px solid #dce3ec}
 .btn-ghost:hover{background:#f4f6fa}
 .btn-success{background:#27ae60;color:#fff}
-.btn-success:disabled,.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn:disabled{opacity:.5;cursor:not-allowed}
 .result-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px}
+.result-head h2{margin:0}
 .result-head .count{font-size:13px;color:#555}
 .table-wrap{border:1px solid #eef1f6;border-radius:8px;max-height:560px;overflow:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}
-thead th{background:#f7f9fc;padding:10px 14px;text-align:left;font-weight:600;color:#555;position:sticky;top:0;border-bottom:1px solid #eef1f6;white-space:nowrap}
+thead th{background:#f7f9fc;padding:10px 14px;text-align:left;font-weight:600;color:#555;position:sticky;top:0;border-bottom:1px solid #eef1f6;white-space:nowrap;z-index:2}
 tbody td{padding:9px 14px;border-bottom:1px solid #f0f3f7;white-space:nowrap}
 tbody tr:hover td{background:var(--main-light)}
 tbody tr:last-child td{border-bottom:none}
 .empty{text-align:center;padding:60px 20px;color:#7a8a9a}
 .empty .big{font-size:48px;margin-bottom:14px;opacity:.6}
-.empty .hint{font-size:14px;line-height:1.8;white-space:pre-wrap}
+.empty .hint{font-size:14px;line-height:1.9;white-space:pre-wrap}
+.pager{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:14px;font-size:13px;color:#555}
+.pager button{padding:6px 14px;border:1px solid #dce3ec;background:#fff;border-radius:6px;cursor:pointer;font-size:13px}
+.pager button:hover:not(:disabled){background:#f4f6fa}
+.pager button:disabled{opacity:.45;cursor:not-allowed}
 .footer{text-align:center;color:#9aa5b1;font-size:12px;padding:24px 10px}
 .lock{position:fixed;inset:0;background:linear-gradient(135deg,var(--main),__COLOR3__);display:flex;align-items:center;justify-content:center;z-index:9999}
 .lock-box{background:#fff;padding:36px 32px;border-radius:12px;width:340px;box-shadow:0 20px 40px rgba(0,0,0,.2)}
@@ -244,10 +267,10 @@ __SEARCHINPUTS__
 
   <div class="card">
     <div class="result-head">
-      <h2 style="margin:0">📋 查询结果</h2>
-      <div style="display:flex;gap:10px;align-items:center">
+      <h2>📋 查询结果</h2>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <span class="count" id="resultCount"></span>
-        <button class="btn btn-success" id="btnExport" disabled>⬇ 导出 Excel</button>
+        <button class="btn btn-success" id="btnExport" disabled>⬇ 导出全部结果</button>
       </div>
     </div>
     <div id="resultBox">
@@ -255,6 +278,11 @@ __SEARCHINPUTS__
         <div class="big">🔎</div>
         <div class="hint">__EMPTYHINT__</div>
       </div>
+    </div>
+    <div class="pager" id="pager" style="display:none">
+      <button id="prevPage">上一页</button>
+      <span id="pageInfo"></span>
+      <button id="nextPage">下一页</button>
     </div>
   </div>
 </div>
@@ -266,8 +294,14 @@ __FOOTERHTML__
 
 <script>
 var __CFG__ = __CFGJSON__;
-var __DATA__ = __DATAJSON__;
+var __H__ = __HEADERSJSON__;
+var __D__ = __ROWSJSON__;
 
+var PAGE_SIZE = 100;
+var viewRows = [];
+var curPage = 0;
+
+/* ---------- 密码门 ---------- */
 (function(){
   var correct = __CFG__.password;
   if (!correct) return;
@@ -277,92 +311,144 @@ var __DATA__ = __DATAJSON__;
   var btn = document.getElementById('pwdBtn');
   var err = document.getElementById('pwdErr');
   function check(){
-    if (input.value === correct){ lock.style.display = 'none'; }
+    if (input.value === correct){ lock.parentNode.removeChild(lock); }
     else { err.textContent = '密码错误，请重试'; input.select(); }
   }
   btn.addEventListener('click', check);
   input.addEventListener('keydown', function(e){ if (e.key === 'Enter') check(); });
 })();
 
+function esc(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function emptyHtml(big, text){
+  return '<div class="empty"><div class="big">' + big + '</div><div class="hint">' + esc(text) + '</div></div>';
+}
+
+function resetView(){
+  document.getElementById('resultCount').textContent = '';
+  document.getElementById('btnExport').disabled = true;
+  document.getElementById('pager').style.display = 'none';
+  document.getElementById('resultBox').innerHTML = emptyHtml('🔎', __CFG__.hint || '请输入至少一个搜索条件后再查询。');
+}
+
+/* ---------- 查询 ---------- */
 function collectConditions(){
   var qs = [];
-  document.querySelectorAll('.fields input[data-col]').forEach(function(inp){
-    var v = inp.value.trim();
-    if (v) qs.push({ col: inp.dataset.col, val: v.toLowerCase() });
-  });
+  var inputs = document.querySelectorAll('.fields input[data-i]');
+  for (var k = 0; k < inputs.length; k++){
+    var v = inputs[k].value.trim();
+    if (v) qs.push({ i: parseInt(inputs[k].getAttribute('data-i'), 10), v: v.toLowerCase() });
+  }
   return qs;
 }
 
 function doSearch(){
   var qs = collectConditions();
-  if (qs.length === 0){
-    document.getElementById('resultCount').textContent = '';
-    document.getElementById('btnExport').disabled = true;
-    document.getElementById('resultBox').innerHTML =
-      '<div class="empty"><div class="big">🔎</div><div class="hint">' + (__CFG__.hint || '请输入至少一个搜索条件后再查询。') + '</div></div>';
-    return;
+  if (qs.length === 0){ viewRows = []; resetView(); return; }
+
+  // 无条件时不展示全部；有条件时逐行做 AND 匹配
+  var rows = __D__;
+  var total = rows.length;
+  var out = [];
+  for (var r = 0; r < total; r++){
+    var row = rows[r];
+    var ok = true;
+    for (var q = 0; q < qs.length; q++){
+      var cell = row[qs[q].i];
+      if (cell === undefined || cell === null || cell === ''){ ok = false; break; }
+      if (String(cell).toLowerCase().indexOf(qs[q].v) === -1){ ok = false; break; }
+    }
+    if (ok) out.push(row);
   }
-  var result = __DATA__.filter(function(row){
-    return qs.every(function(q){
-      var cell = row[q.col];
-      if (cell === undefined || cell === null) return false;
-      return String(cell).toLowerCase().indexOf(q.val) !== -1;
-    });
-  });
-  renderResult(result);
+  viewRows = out;
+  curPage = 0;
+  renderPage();
 }
 
-function renderResult(rows){
+function renderPage(){
   var box = document.getElementById('resultBox');
-  var cols = __CFG__.resultCols;
-  document.getElementById('resultCount').textContent = '共 ' + rows.length.toLocaleString() + ' 条';
-  if (rows.length === 0){
+  var cols = __CFG__.cols;
+  var total = viewRows.length;
+  document.getElementById('resultCount').textContent = '共 ' + total.toLocaleString() + ' 条';
+
+  if (total === 0){
     document.getElementById('btnExport').disabled = true;
-    box.innerHTML = '<div class="empty"><div class="big">😶</div><div class="hint">没有找到匹配的数据，请调整搜索条件后重试。</div></div>';
+    document.getElementById('pager').style.display = 'none';
+    box.innerHTML = emptyHtml('😶', '没有找到匹配的数据，请调整搜索条件后重试。');
     return;
   }
+
+  var pages = Math.ceil(total / PAGE_SIZE);
+  var start = curPage * PAGE_SIZE;
+  var slice = viewRows.slice(start, Math.min(start + PAGE_SIZE, total));
+
   var html = '<div class="table-wrap"><table><thead><tr>';
-  cols.forEach(function(c){ html += '<th>' + c.name + '</th>'; });
+  for (var c = 0; c < cols.length; c++) html += '<th>' + esc(__H__[cols[c]]) + '</th>';
   html += '</tr></thead><tbody>';
-  rows.forEach(function(r){
+  for (var r = 0; r < slice.length; r++){
+    var row = slice[r];
     html += '<tr>';
-    cols.forEach(function(c){
-      var v = r[c.name];
-      html += '<td>' + (v === undefined || v === null ? '' : String(v)) + '</td>';
-    });
+    for (var c2 = 0; c2 < cols.length; c2++){
+      var v = row[cols[c2]];
+      html += '<td>' + esc(v === undefined || v === null ? '' : v) + '</td>';
+    }
     html += '</tr>';
-  });
+  }
   html += '</tbody></table></div>';
   box.innerHTML = html;
+
   document.getElementById('btnExport').disabled = false;
-  document.getElementById('btnExport').dataset.rows = JSON.stringify(rows);
+  var pager = document.getElementById('pager');
+  if (pages > 1){
+    pager.style.display = 'flex';
+    document.getElementById('pageInfo').textContent = '第 ' + (curPage+1) + ' / ' + pages + ' 页（每页 ' + PAGE_SIZE + ' 条）';
+    document.getElementById('prevPage').disabled = curPage === 0;
+    document.getElementById('nextPage').disabled = curPage >= pages - 1;
+  } else {
+    pager.style.display = 'none';
+  }
 }
 
+/* ---------- 事件 ---------- */
 document.getElementById('btnSearch').addEventListener('click', doSearch);
 document.getElementById('btnReset').addEventListener('click', function(){
-  document.querySelectorAll('.fields input[data-col]').forEach(function(inp){ inp.value = ''; });
-  document.getElementById('resultCount').textContent = '';
-  document.getElementById('btnExport').disabled = true;
-  document.getElementById('resultBox').innerHTML =
-    '<div class="empty"><div class="big">🔎</div><div class="hint">' + (__CFG__.hint || '请输入至少一个搜索条件后再查询。') + '</div></div>';
+  var inputs = document.querySelectorAll('.fields input[data-i]');
+  for (var k = 0; k < inputs.length; k++) inputs[k].value = '';
+  viewRows = []; curPage = 0;
+  resetView();
 });
+document.getElementById('prevPage').addEventListener('click', function(){ if (curPage > 0){ curPage--; renderPage(); } });
+document.getElementById('nextPage').addEventListener('click', function(){ if ((curPage+1)*PAGE_SIZE < viewRows.length){ curPage++; renderPage(); } });
 
 document.getElementById('btnExport').addEventListener('click', function(){
-  var raw = this.dataset.rows;
-  if (!raw) return;
-  var rows = JSON.parse(raw);
-  var cols = __CFG__.resultCols.map(function(c){ return c.name; });
-  var exportData = rows.map(function(r){
-    var o = {}; cols.forEach(function(c){ o[c] = r[c] === undefined ? '' : r[c]; }); return o;
-  });
-  var ws = XLSX.utils.json_to_sheet(exportData, { header: cols });
-  var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, (__CFG__.sheetName || '查询结果').substring(0, 30));
-  XLSX.writeFile(wb, (__CFG__.title || '查询结果') + '_' + new Date().toISOString().slice(0,10) + '.xlsx');
+  if (!viewRows.length) return;
+  var btn = this;
+  btn.disabled = true; btn.textContent = '正在导出…';
+  setTimeout(function(){
+    try {
+      var cols = __CFG__.cols;
+      var aoa = [cols.map(function(ci){ return __H__[ci]; })];
+      for (var r = 0; r < viewRows.length; r++){
+        var row = viewRows[r], line = [];
+        for (var c = 0; c < cols.length; c++){
+          var v = row[cols[c]];
+          line.push(v === undefined || v === null ? '' : v);
+        }
+        aoa.push(line);
+      }
+      var ws = XLSX.utils.aoa_to_sheet(aoa);
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, String(__CFG__.sheetName || '查询结果').substring(0, 30));
+      XLSX.writeFile(wb, (__CFG__.title || '查询结果') + '_' + new Date().toISOString().slice(0,10) + '.xlsx');
+    } catch(e){ alert('导出失败：' + e.message); }
+    btn.disabled = false; btn.textContent = '⬇ 导出全部结果';
+  }, 60);
 });
 
 document.addEventListener('keydown', function(e){
-  if (e.key === 'Enter' && e.target.matches('.fields input')) doSearch();
+  if (e.key === 'Enter' && e.target && e.target.matches && e.target.matches('.fields input')) doSearch();
 });
 </script>
 </body>
@@ -373,37 +459,56 @@ document.addEventListener('keydown', function(e){
 <script src="xlsx.full.min.js"></script>
 <script>
 /* ===========================================================
-   状态
+   全局状态
 =========================================================== */
 var state = {
-  workbook: null,
+  buffer: null,       // 原始文件 ArrayBuffer（切换 sheet 时复用，避免重复读文件）
+  fileName: '',
+  fileSize: 0,
+  workbook: null,     // 仅用于读取 sheet 名
   sheetName: '',
-  rows: [],
+  matrix: [],         // 首行为表头，其余为数据；二维数组比对象数组省内存
   headers: [],
+  rows: 0,
 };
 
+/* 单表解析缓存：切换表时避免重复解析 */
+var sheetCache = { name: null, matrix: null };
+
 /* ===========================================================
-   DOM helpers
+   DOM
 =========================================================== */
 function $(id){ return document.getElementById(id); }
-var dropZone = $('dropZone');
-var fileInput = $('fileInput');
-var fileInfo = $('fileInfo');
-var sheetArea = $('sheetArea');
-var sheetList = $('sheetList');
-var previewCard = $('previewCard');
-var previewTable = $('previewTable');
-var statsEl = $('stats');
-var colCountEl = $('colCount');
-var configCard = $('configCard');
-var searchCard = $('searchCard');
-var resultCard = $('resultCard');
-var btnGenerate = $('btnGenerate');
-var btnPreviewGen = $('btnPreviewGen');
-var genArea = $('genArea');
-var genInfo = $('genInfo');
-var genOutput = $('genOutput');
+var dropZone = $('dropZone'), fileInput = $('fileInput'), fileInfo = $('fileInfo');
+var sheetArea = $('sheetArea'), sheetList = $('sheetList');
+var previewCard = $('previewCard'), previewTable = $('previewTable');
+var statsEl = $('stats'), colCountEl = $('colCount');
+var configCard = $('configCard'), searchCard = $('searchCard'), resultCard = $('resultCard');
+var btnGenerate = $('btnGenerate'), btnPreviewGen = $('btnPreviewGen');
+var genArea = $('genArea'), genInfo = $('genInfo'), genNote = $('genNote'), genOutput = $('genOutput');
 var colorHex = $('colorHex');
+var busy = $('busy'), busyText = $('busyText'), busySub = $('busySub');
+
+/* ===========================================================
+   遮罩与让出主线程（关键：让浏览器先把遮罩画出来，再跑重活）
+=========================================================== */
+function showBusy(text, sub){
+  busyText.textContent = text || '正在处理…';
+  busySub.textContent = sub || '大文件解析需要几秒，请勿关闭页面';
+  busy.classList.add('show');
+}
+function hideBusy(){ busy.classList.remove('show'); }
+function nextPaint(){
+  // 让浏览器先把遮罩画出来再跑重活；后台标签页 rAF 可能不触发，加定时器兜底
+  return new Promise(function(resolve){
+    var done = false;
+    function fin(){ if (done) return; done = true; resolve(); }
+    if (typeof requestAnimationFrame === 'function'){
+      requestAnimationFrame(function(){ setTimeout(fin, 0); });
+    }
+    setTimeout(fin, 60);
+  });
+}
 
 /* ===========================================================
    上传 / 拖拽
@@ -417,19 +522,48 @@ dropZone.addEventListener('drop', function(e){
 });
 fileInput.addEventListener('change', function(e){ var f = e.target.files[0]; if (f) handleFile(f); });
 
-function handleFile(file){
+async function handleFile(file){
   if (!/\.(xlsx|xls)$/i.test(file.name)){ alert('仅支持 .xlsx / .xls 文件'); return; }
-  var reader = new FileReader();
-  reader.onload = function(e){
-    try {
-      var wb = XLSX.read(e.target.result, { type: 'array' });
-      state.workbook = wb;
-      fileInfo.style.display = 'block';
-      fileInfo.innerHTML = '\ud83d\udcc4 <b>' + file.name + '</b> \u00a0\u00b7\u00a0\u00a0 ' + (file.size/1024/1024).toFixed(2) + ' MB \u00a0\u00b7\u00a0\u00a0 ' + wb.SheetNames.length + ' \u4e2a\u5de5\u4f5c\u8868';
-      renderSheets(wb.SheetNames);
-    } catch(err){ alert('Excel 解析失败：' + err.message); }
-  };
-  reader.readAsArrayBuffer(file);
+
+  state.buffer = null;
+  state.matrix = []; state.headers = []; state.rows = 0;
+  sheetCache = { name: null, matrix: null };
+  previewCard.style.display = 'none';
+  configCard.style.display = 'none';
+  searchCard.style.display = 'none';
+  resultCard.style.display = 'none';
+  genArea.style.display = 'none';
+  btnGenerate.disabled = true;
+  btnPreviewGen.disabled = true;
+
+  showBusy('正在读取文件…', file.name + ' · ' + (file.size/1024/1024).toFixed(2) + ' MB');
+  await nextPaint();
+
+  try {
+    var ab = await file.arrayBuffer();
+    state.buffer = ab;
+    state.fileName = file.name;
+    state.fileSize = file.size;
+
+    // 第一步：只读工作表名（很快，约 0.3 秒）
+    showBusy('正在读取工作表列表…');
+    await nextPaint();
+    var meta = XLSX.read(ab, { type: 'array', bookSheets: true });
+    state.workbook = meta;
+
+    fileInfo.style.display = 'block';
+    fileInfo.innerHTML = '📄 <b>' + escHtml(file.name) + '</b> &nbsp;·&nbsp; ' +
+      (file.size/1024/1024).toFixed(2) + ' MB &nbsp;·&nbsp; ' +
+      meta.SheetNames.length + ' 个工作表';
+
+    renderSheets(meta.SheetNames);
+    if (meta.SheetNames.length) await parseSheet(meta.SheetNames[0]);
+  } catch(err){
+    hideBusy();
+    alert('Excel 读取失败：' + err.message);
+    return;
+  }
+  hideBusy();
 }
 
 function renderSheets(names){
@@ -437,24 +571,201 @@ function renderSheets(names){
   sheetList.innerHTML = '';
   names.forEach(function(n, i){
     var chip = document.createElement('div');
-    chip.className = 'sheet-chip' + (i === 0 ? ' active' : '');
+    chip.className = 'sheet-chip';
     chip.textContent = n;
     chip.onclick = function(){
-      sheetList.querySelectorAll('.sheet-chip').forEach(function(c){ c.classList.remove('active'); });
+      var chips = sheetList.querySelectorAll('.sheet-chip');
+      for (var k = 0; k < chips.length; k++) chips[k].classList.remove('active');
       chip.classList.add('active');
-      selectSheet(n);
+      parseSheet(n);
     };
     sheetList.appendChild(chip);
   });
-  selectSheet(names[0]);
+  if (names.length){
+    var first = sheetList.querySelector('.sheet-chip');
+    if (first) first.classList.add('active');
+  }
 }
 
-function selectSheet(name){
+/* ===========================================================
+   解析单个工作表（on-demand，只解析选中的表）
+=========================================================== */
+async function parseSheet(name){
+  if (!state.buffer) return;
+
+  if (sheetCache.name === name){
+    applyMatrix(name, sheetCache.matrix);
+    return;
+  }
+
+  showBusy('正在解析工作表 “' + name + '”…', '数万行数据约需数秒，请稍候');
+  await nextPaint();
+
+  try {
+    var wb = XLSX.read(state.buffer, {
+      type: 'array',
+      dense: true,          // dense 模式：内存占用与转换速度都明显更优
+      cellDates: true,      // 日期直接解析为 Date，避免逐格格式化
+      sheetStubs: false,
+      cellStyles: false,
+      cellNF: false,
+      cellHTML: false,
+      sheets: name          // 只解析这一张表
+    });
+    var ws = wb.Sheets[name];
+    var matrix = ws ? denseSheetToMatrix(ws) : [];
+    sheetCache = { name: name, matrix: matrix };
+    applyMatrix(name, matrix);
+  } catch(err){
+    hideBusy();
+    alert('工作表解析失败：' + err.message);
+    return;
+  }
+  hideBusy();
+}
+
+/* ===========================================================
+   dense 工作表 → 二维数组（首行表头）
+   关键优化：不依赖可能被撑大的 !ref，倒查真实最后一行；
+            全程数组下标取值，避免 sheet_to_json 的逐格格式化开销
+=========================================================== */
+function denseSheetToMatrix(ws){
+  var startT = performance.now();
+
+  // 非 dense 结构兜底（老版读取方式）
+  if (ws['!data'] && Array.isArray(ws['!data'])){
+    ws = (function(){
+      var o = {}; o['!ref'] = ws['!ref'];
+      ws['!data'].forEach(function(row, i){ o[i] = row; });
+      return o;
+    })();
+  }
+  if (!Array.isArray(ws[0]) && !Array.isArray(ws[1])){
+    // 兜底：常规结构走 sheet_to_json（此时数据量一般不大）
+    var arr = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, blankrows: false });
+    return normalizeMatrix(arr);
+  }
+
+  // 倒查真实最后一行（防止 !ref 被整列格式化成 1048576 行）
+  var ref = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']) : null;
+  var upper = ref ? Math.min(ref.e.r, 1048575) : 0;
+  var lastRow = -1;
+  for (var i = upper; i >= 0; i--){
+    if (ws[i] && ws[i].length){ lastRow = i; break; }
+  }
+  if (lastRow < 0) return [];
+
+  // 统计最大列数（限制上限，避免异常表）
+  var maxC = 0;
+  for (var r = 0; r <= lastRow; r++){
+    var row = ws[r];
+    if (row && row.length > maxC) maxC = row.length;
+    if (maxC > 512) { maxC = 512; break; }
+  }
+
+  var out = [];
+  for (var r2 = 0; r2 <= lastRow; r2++){
+    var row2 = ws[r2];
+    if (!row2 || !row2.length){ continue; }
+    var line = new Array(maxC);
+    var has = false;
+    for (var c = 0; c < maxC; c++){
+      var cell = row2[c];
+      var v = '';
+      if (cell && cell.v !== undefined && cell.v !== null){
+        v = normalizeCell(cell.v);
+        if (v !== '') has = true;
+      }
+      line[c] = v;
+    }
+    // 跳过全空行，但保留首行（表头位）
+    if (has || out.length === 0) out.push(line);
+  }
+
+  var cost = Math.round(performance.now() - startT);
+  console.log('[解析] ' + lastRow + ' 行区间 → 有效 ' + out.length + ' 行，耗时 ' + cost + 'ms');
+  return normalizeMatrix(out);
+}
+
+function normalizeCell(v){
+  if (v instanceof Date){
+    var p = function(n){ return (n < 10 ? '0' : '') + n; };
+    var s = v.getFullYear() + '-' + p(v.getMonth()+1) + '-' + p(v.getDate());
+    if (v.getHours() || v.getMinutes() || v.getSeconds()){
+      s += ' ' + p(v.getHours()) + ':' + p(v.getMinutes()) + ':' + p(v.getSeconds());
+    }
+    return s;
+  }
+  if (typeof v === 'number'){
+    if (!isFinite(v)) return '';
+    return v;
+  }
+  if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
+  return String(v);
+}
+
+/* 首行作表头；空表头补 “列N”；去掉全空尾列 */
+function normalizeMatrix(arr){
+  if (!arr.length) return { headers: [], rows: [] };
+
+  // 找第一行非空行作表头
+  var headIdx = 0;
+  for (var i = 0; i < arr.length; i++){
+    var any = false;
+    for (var j = 0; j < arr[i].length; j++){
+      if (arr[i][j] !== '' && arr[i][j] !== null && arr[i][j] !== undefined){ any = true; break; }
+    }
+    if (any){ headIdx = i; break; }
+  }
+
+  var head = arr[headIdx] || [];
+  var width = head.length;
+
+  // 尾列全空则裁掉
+  while (width > 0){
+    var empty = true;
+    for (var r = headIdx; r < arr.length; r++){
+      var v = arr[r] && arr[r][width-1];
+      if (v !== '' && v !== null && v !== undefined && v !== false && v !== 0){ empty = false; break; }
+    }
+    if (!empty) break;
+    width--;
+  }
+
+  var headers = [];
+  for (var c = 0; c < width; c++){
+    var h = head[c];
+    var name = (h === '' || h === null || h === undefined) ? ('列' + (c+1)) : String(h);
+    headers.push(name);
+  }
+
+  var rows = [];
+  for (var r2 = headIdx + 1; r2 < arr.length; r2++){
+    var src = arr[r2] || [];
+    var line = new Array(width);
+    var has = false;
+    for (var c2 = 0; c2 < width; c2++){
+      var val = src[c2];
+      line[c2] = (val === undefined || val === null) ? '' : val;
+      if (line[c2] !== '') has = true;
+    }
+    if (has) rows.push(line);
+  }
+  return { headers: headers, rows: rows };
+}
+
+function applyMatrix(name, norm){
   state.sheetName = name;
-  var ws = state.workbook.Sheets[name];
-  var rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
-  state.rows = rows;
-  state.headers = rows.length ? Object.keys(rows[0]) : [];
+  state.headers = norm.headers;
+  state.matrix = norm.rows;
+
+  if (!norm.headers.length){
+    alert('工作表 “' + name + '” 没有可解析的数据');
+    return;
+  }
+  if (norm.rows.length > 300000){
+    alert('该表有 ' + norm.rows.length.toLocaleString() + ' 行，超过 30 万行，浏览器内存可能不足。\n建议先在 Excel 中拆分后再生成。');
+  }
 
   renderPreview();
   renderColumnConfigs();
@@ -467,26 +778,36 @@ function selectSheet(name){
   genArea.style.display = 'none';
 }
 
+/* ===========================================================
+   预览（只渲染前 50 行，避免大表卡顿）
+=========================================================== */
 function renderPreview(){
   previewTable.innerHTML = '';
   var hrow = previewTable.insertRow();
-  state.headers.forEach(function(h){ var c = document.createElement('th'); c.textContent = h; hrow.appendChild(c); });
-  var limit = Math.min(state.rows.length, 50);
+  hrow.innerHTML = '';
+  state.headers.forEach(function(h){
+    var th = document.createElement('th');
+    th.textContent = h;
+    hrow.appendChild(th);
+  });
+  var limit = Math.min(state.matrix.length, 50);
   for (var i = 0; i < limit; i++){
     var tr = previewTable.insertRow();
-    state.headers.forEach(function(h){
+    var row = state.matrix[i];
+    for (var c = 0; c < state.headers.length; c++){
       var td = document.createElement('td');
-      var v = state.rows[i][h];
-      td.textContent = v === undefined || v === null ? '' : String(v);
+      var v = row[c];
+      td.textContent = (v === undefined || v === null) ? '' : String(v);
       tr.appendChild(td);
-    });
+    }
   }
   colCountEl.textContent = state.headers.length;
-  statsEl.textContent = '\u5171 ' + state.rows.length.toLocaleString() + ' \u884c\u6570\u636e / ' + state.headers.length + ' \u5217\uff08\u9884\u89c8\u524d ' + limit + ' \u884c\uff09';
+  statsEl.textContent = '共 ' + state.matrix.length.toLocaleString() + ' 行数据 / ' +
+    state.headers.length + ' 列（预览前 ' + limit + ' 行）';
 }
 
 /* ===========================================================
-   列配置（搜索列 + 结果列）
+   列配置
 =========================================================== */
 function renderColumnConfigs(){
   renderColList('searchList', true);
@@ -502,7 +823,31 @@ function renderColList(containerId, isSearch){
     item.draggable = true;
     var isFirst = idx === 0;
     var checked = isSearch ? (isFirst ? 'checked' : '') : 'checked';
-    item.innerHTML = '<span class="handle">\u22ee\u22ee</span><input type="checkbox" data-idx="' + idx + '" ' + checked + '><span class="name">' + h + (isFirst ? '<span class="tag first-col-tag">第一列</span>' : '') + '</span><span class="hint">\u5217 #' + (idx+1) + '</span>';
+
+    var handle = document.createElement('span');
+    handle.className = 'handle';
+    handle.textContent = '⋮⋮';
+
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.setAttribute('data-idx', idx);
+    cb.checked = checked;
+
+    var nameEl = document.createElement('span');
+    nameEl.className = 'name';
+    nameEl.textContent = h;
+    if (isFirst){
+      var tag = document.createElement('span');
+      tag.className = 'tag first-col-tag';
+      tag.textContent = '第一列';
+      nameEl.appendChild(tag);
+    }
+
+    var hint = document.createElement('span');
+    hint.className = 'hint';
+    hint.textContent = '列 #' + (idx + 1);
+
+    item.appendChild(handle); item.appendChild(cb); item.appendChild(nameEl); item.appendChild(hint);
     box.appendChild(item);
   });
   attachDrag(box);
@@ -522,7 +867,8 @@ function attachDrag(box){
     item.addEventListener('drop', function(e){
       e.preventDefault();
       if (!dragging || dragging === item) return;
-      if (dragging.compareDocumentPosition(item) & Node.DOCUMENT_POSITION_FOLLOWING) item.after(dragging); else item.before(dragging);
+      if (dragging.compareDocumentPosition(item) & Node.DOCUMENT_POSITION_FOLLOWING) item.after(dragging);
+      else item.before(dragging);
       box.querySelectorAll('.col-item').forEach(function(i){ i.classList.remove('drop-target'); });
     });
   });
@@ -530,30 +876,27 @@ function attachDrag(box){
 
 function getOrderedChecked(containerId){
   var box = $(containerId);
-  var checked = [];
+  var out = [];
   box.querySelectorAll('.col-item').forEach(function(item){
     var cb = item.querySelector('input[type=checkbox]');
     if (cb.checked){
-      var idx = parseInt(cb.dataset.idx, 10);
-      checked.push({ idx: idx, name: state.headers[idx] });
+      var idx = parseInt(cb.getAttribute('data-idx'), 10);
+      out.push({ i: idx, name: state.headers[idx] });
     }
   });
-  return checked;
+  return out;
 }
 
 /* ===========================================================
-   主题颜色同步
+   颜色
 =========================================================== */
 $('cfgColor').addEventListener('input', function(e){ colorHex.textContent = e.target.value; });
 $('cfgPreset').addEventListener('change', function(e){
   if (e.target.value){ $('cfgColor').value = e.target.value; colorHex.textContent = e.target.value; }
 });
 
-/* ===========================================================
-   颜色工具
-=========================================================== */
 function hexToRgb(hex){
-  hex = hex.replace('#','');
+  hex = String(hex).replace('#','');
   if (hex.length === 3) hex = hex.split('').map(function(c){ return c+c; }).join('');
   return { r: parseInt(hex.substr(0,2),16), g: parseInt(hex.substr(2,2),16), b: parseInt(hex.substr(4,2),16) };
 }
@@ -583,80 +926,104 @@ async function buildStandaloneHtml(){
     password: $('cfgPassword').value || '',
     color: $('cfgColor').value || '#3498db',
     sheetName: state.sheetName,
-    searchCols: searchCols,
-    resultCols: resultCols,
-    headers: state.headers,
+    search: searchCols,
+    cols: resultCols.map(function(c){ return c.i; }),
+    total: state.matrix.length
   };
 
-  // 读取本地 SheetJS 代码嵌入
+  showBusy('正在生成查询页…', '数据量较大时需要几秒');
+  await nextPaint();
+
   var sheetJsCode = '';
   try {
     var resp = await fetch('xlsx.full.min.js', { cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
     sheetJsCode = await resp.text();
   } catch(e){
-    alert('未能读取本地 xlsx.full.min.js：' + e.message + '\n请确保 xlsx.full.min.js 与 admin.html 在同一目录。');
+    hideBusy();
+    alert('未能读取 xlsx.full.min.js：' + e.message + '\n请确保它和 admin.html 放在同一目录。');
     return null;
   }
 
-  return fillTemplate(cfg, sheetJsCode, state.rows);
+  await nextPaint();
+  var html = fillTemplate(cfg, sheetJsCode);
+  hideBusy();
+  return html;
 }
 
-function fillTemplate(cfg, sheetJsCode, rows){
+function fillTemplate(cfg, sheetJsCode){
   var tpl = $('queryTemplate').innerHTML;
   var color = cfg.color;
   var rgb = hexToRgb(color);
-  var light = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.12)';
-  var hover = shade(color, -12);
-  var color2 = shade(color, 10);
-  var color3 = shade(color, -15);
 
-  // 安全转义：避免数据里的结束脚本标签打断模板
-  var safe = function(s){ return String(s).replace(/<\/script>/gi, '<\\/script>'); };
-
-  // 搜索输入框 HTML
-  var searchInputs = cfg.searchCols.map(function(c, i){
-    return '        <div class="field">\n          <label>' + c.name + '</label>\n          <input type="text" data-col="' + c.name + '" id="q_' + i + '" placeholder="输入关键词…">\n        </div>';
+  var searchInputs = cfg.search.map(function(c, i){
+    return '        <div class="field">\n          <label>' + escHtml(c.name) + '</label>\n' +
+           '          <input type="text" data-i="' + c.i + '" id="q_' + i + '" placeholder="输入关键词…">\n        </div>';
   }).join('\n');
 
-  // 密码门 HTML
   var lockHtml = '';
   if (cfg.password){
-    lockHtml = '<div class="lock" id="lockScreen">\n  <div class="lock-box">\n    <h2>\ud83d\udd12 ' + cfg.title + '</h2>\n    <p>请输入访问密码</p>\n    <input type="password" id="pwdInput" placeholder="密码" autofocus>\n    <div class="err" id="pwdErr"></div>\n    <button id="pwdBtn">进入</button>\n  </div>\n</div>';
+    lockHtml = '<div class="lock" id="lockScreen">\n  <div class="lock-box">\n' +
+      '    <h2>🔒 ' + escHtml(cfg.title) + '</h2>\n    <p>请输入访问密码</p>\n' +
+      '    <input type="password" id="pwdInput" placeholder="密码" autofocus>\n' +
+      '    <div class="err" id="pwdErr"></div>\n    <button id="pwdBtn">进入</button>\n' +
+      '  </div>\n</div>';
   }
 
-  var subHtml = cfg.hint ? '  <div class="sub">' + cfg.hint + '</div>' : '';
-  var footerHtml = cfg.footer ? '<div class="footer">' + cfg.footer + '</div>' : '';
+  var subHtml = cfg.hint ? '  <div class="sub">' + escHtml(cfg.hint) + '</div>' : '';
+  var footerHtml = cfg.footer ? '<div class="footer">' + escHtml(cfg.footer) + '</div>' : '';
   var emptyHint = cfg.hint || '请在上方输入搜索条件后点击「查询」。';
 
-  var cfgJson = JSON.stringify(cfg).replace(/<\/script>/gi, '<\\/script>');
-  var dataJson = JSON.stringify(rows).replace(/<\/script>/gi, '<\\/script>');
+  var cfgJson = safeJson(cfg);
+  var headersJson = safeJson(state.headers);
+  var rowsJson = safeJson(state.matrix);
 
   return tpl
-    .replace(/__TITLE__/g, safe(cfg.title))
-    .replace(/__COLOR__/g, color)
-    .replace(/__LIGHT__/g, light)
-    .replace(/__HOVER__/g, hover)
-    .replace(/__COLOR2__/g, color2)
-    .replace(/__COLOR3__/g, color3)
-    .replace('__LOCKHTML__', lockHtml)
-    .replace('__SUBHTML__', subHtml)
-    .replace('__SEARCHINPUTS__', searchInputs)
-    .replace(/__EMPTYHINT__/g, safe(emptyHint))
-    .replace('__FOOTERHTML__', footerHtml)
-    .replace('__SHEETJS__', sheetJsCode)
-    .replace('__CFGJSON__', cfgJson)
-    .replace('__DATAJSON__', dataJson);
+    .replace(/__TITLE__/g, function(){ return escHtml(cfg.title); })
+    .replace(/__COLOR__/g, function(){ return color; })
+    .replace(/__LIGHT__/g, function(){ return 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.12)'; })
+    .replace(/__HOVER__/g, function(){ return shade(color, -12); })
+    .replace(/__COLOR2__/g, function(){ return shade(color, 10); })
+    .replace(/__COLOR3__/g, function(){ return shade(color, -15); })
+    .replace('__LOCKHTML__', function(){ return lockHtml; })
+    .replace('__SUBHTML__', function(){ return subHtml; })
+    .replace('__SEARCHINPUTS__', function(){ return searchInputs; })
+    .replace(/__EMPTYHINT__/g, function(){ return escHtml(emptyHint); })
+    .replace('__FOOTERHTML__', function(){ return footerHtml; })
+    .replace('__SHEETJS__', function(){ return sheetJsCode; })
+    .replace('__CFGJSON__', function(){ return cfgJson; })
+    .replace('__HEADERSJSON__', function(){ return headersJson; })
+    .replace('__ROWSJSON__', function(){ return rowsJson; });
+}
+
+/* JSON 内嵌转义：防止数据里的结束脚本标签打断页面 */
+function safeJson(obj){
+  return JSON.stringify(obj).replace(/<\/script>/gi, '<\\/script>');
+}
+
+function escHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 /* ===========================================================
-   按钮事件
+   生成按钮
 =========================================================== */
 btnPreviewGen.addEventListener('click', async function(){
   var html = await buildStandaloneHtml();
   if (!html) return;
+  var mb = html.length / 1024 / 1024;
   genArea.style.display = 'block';
-  genInfo.textContent = '\u5df2\u751f\u6210 \u00b7 \u5927\u5c0f\u7ea6 ' + (html.length / 1024).toFixed(1) + ' KB \u00b7 \u5305\u542b ' + state.rows.length.toLocaleString() + ' \u884c\u6570\u636e';
-  genOutput.value = html;
+  genInfo.textContent = '已生成 · 大小约 ' + (html.length/1024).toFixed(1) + ' KB · 包含 ' +
+    state.matrix.length.toLocaleString() + ' 行数据';
+  if (mb > 2){
+    genNote.style.display = 'block';
+    genNote.textContent = '⚠️ 生成内容约 ' + mb.toFixed(1) + ' MB，为避免页面卡顿未在下方显示源码，请直接点「下载为 .html」。';
+    genOutput.value = '';
+  } else {
+    genNote.style.display = 'none';
+    genOutput.value = html;
+  }
+  window.__lastHtml = html;
 });
 
 btnGenerate.addEventListener('click', async function(){
@@ -670,26 +1037,40 @@ btnGenerate.addEventListener('click', async function(){
   a.download = base + '_查询页.html';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+
+  var mb = html.length / 1024 / 1024;
   genArea.style.display = 'block';
-  genInfo.textContent = '\u2705 \u5df2\u89e6\u53d1\u4e0b\u8f7d \u00b7 \u5927\u5c0f\u7ea6 ' + (html.length / 1024).toFixed(1) + ' KB \u00b7 \u5305\u542b ' + state.rows.length.toLocaleString() + ' \u884c\u6570\u636e';
-  genOutput.value = html;
+  genInfo.textContent = '✅ 已触发下载 · 大小约 ' + (html.length/1024).toFixed(1) + ' KB · 包含 ' +
+    state.matrix.length.toLocaleString() + ' 行数据';
+  if (mb > 2){
+    genNote.style.display = 'block';
+    genNote.textContent = '⚠️ 文件约 ' + mb.toFixed(1) + ' MB，源码未在此显示（避免页面卡顿），已直接下载。';
+    genOutput.value = '';
+  } else {
+    genNote.style.display = 'none';
+    genOutput.value = html;
+  }
+  window.__lastHtml = html;
 });
 
 $('btnDownload').addEventListener('click', function(){
-  if (!genOutput.value) return;
-  var blob = new Blob([genOutput.value], { type: 'text/html;charset=utf-8' });
+  var html = window.__lastHtml;
+  if (!html) return;
+  var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
-  a.href = url; a.download = 'query_page.html';
+  a.href = url; a.download = (state.sheetName || 'query') + '_查询页.html';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 });
 
 $('btnCopy').addEventListener('click', async function(){
+  var html = window.__lastHtml || genOutput.value;
+  if (!html) { alert('请先生成'); return; }
   try {
-    await navigator.clipboard.writeText(genOutput.value);
-    $('btnCopy').textContent = '\u2705 \u5df2\u590d\u5236';
-    setTimeout(function(){ $('btnCopy').textContent = '\ud83d\udccb \u590d\u5236 HTML'; }, 1500);
+    await navigator.clipboard.writeText(html);
+    $('btnCopy').textContent = '✅ 已复制';
+    setTimeout(function(){ $('btnCopy').textContent = '📋 复制 HTML'; }, 1500);
   } catch(e){ alert('复制失败：' + e.message); }
 });
 
@@ -702,12 +1083,11 @@ $('btnReset').addEventListener('click', function(){
   $('cfgColor').value = '#3498db';
   colorHex.textContent = '#3498db';
   $('cfgPreset').value = '';
-  selectSheet(state.sheetName);
+  if (state.sheetName) applyMatrix(state.sheetName, { headers: state.headers, rows: state.matrix });
 });
 
-// 全局错误提示（便于调试）
 window.addEventListener('error', function(e){
-  console.error('Admin script error:', e.error || e.message, e.filename, e.lineno);
+  console.error('[admin] 未捕获错误:', e.error || e.message, e.filename, e.lineno);
 });
 </script>
 </body>
